@@ -1,0 +1,208 @@
+version: '2'
+services:
+
+  db:
+    image: geonode/postgis:10
+    restart: unless-stopped
+    stdin_open: true
+    # tty: true
+    volumes:
+    - dbdata:/var/lib/postgresql/data
+    - dbbackups:/pg_backups
+    environment:
+      GEONODE_DATABASE: geonode_db
+      GEONODE_DATABASE_PASSWORD: geonode_db_password
+      GEONODE_GEODATABASE: geonode_data_db
+      GEONODE_GEODATABASE_PASSWORD: geonode_data_db_password
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      org.geonode.component: db
+      org.geonode.instance.name: geonode
+
+  django:
+    image: internal-gitlab-registry-url/geonode/docker/geonode-docker:${GEONODE_DOCKER_VERSION}
+    restart: unless-stopped
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+     - statics:/mnt/volumes/statics
+     - geoserver-data-dir:/geoserver_data/data
+    depends_on:
+     - db
+     - elasticsearch
+     - rabbitmq
+     - data-dir-conf
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      BROKER_URL: amqp://guest:guest@rabbitmq:5672/
+      C_FORCE_ROOT: '1'
+      # Database URL should be in the form:
+      # postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]
+      DATABASE_URL: postgres://postgres_user:postgres_password@db:5432/postgres
+      DEFAULT_BACKEND_DATASTORE: datastore
+      DJANGO_SETTINGS_MODULE: geonode.local_settings
+      DOCKER_ENV: production
+      GEONODE_DATABASE: geonode_db
+      GEONODE_DATABASE_PASSWORD: geonode_db_password
+      GEONODE_GEODATABASE: geonode_data_db
+      GEONODE_GEODATABASE_PASSWORD: geonode_data_db_password
+      GEONODE_INSTANCE_NAME: geonode
+      GEOSERVER_LOCATION: http://geonode/geoserver/
+      GEOSERVER_PUBLIC_LOCATION: ${SITEURL}geoserver/
+      IS_CELERY: 'false'
+      SITEURL: ${SITEURL}
+      UWSGI_CMD: uwsgi --ini /usr/src/app/uwsgi.ini
+      #ADMIN_EMAILS: ${ADMIN_EMAILS}
+      RANCHER_STACK: {{ .Stack.Name }}
+      RANCHER_ENV: {{ .Environment.Name }}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      org.geonode.component: django
+      org.geonode.instance.name: geonode
+      io.rancher.container.pull_image: always
+
+  celery:
+    image: internal-gitlab-registry-url/geonode/docker/geonode-docker:${GEONODE_DOCKER_VERSION}
+    restart: unless-stopped
+    stdin_open: true
+    # tty: true
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      BROKER_URL: amqp://guest:guest@rabbitmq:5672/
+      CELERY_CMD: celery worker --app=geonode.celery_app:app --broker=amqp://guest:guest@rabbitmq:5672/ -B -l INFO
+      C_FORCE_ROOT: '1'
+      DATABASE_URL: postgres://postgres_user:postgres_password@db:5432/postgres
+      DEFAULT_BACKEND_DATASTORE: datastore
+      DJANGO_SETTINGS_MODULE: geonode.local_settings
+      DOCKER_ENV: production
+      GEONODE_DATABASE: geonode_db
+      GEONODE_DATABASE_PASSWORD: geonode_db_password
+      GEONODE_GEODATABASE: geonode_data_db
+      GEONODE_GEODATABASE_PASSWORD: geonode_data_db_password
+      GEONODE_INSTANCE_NAME: geonode
+      GEOSERVER_LOCATION: http://geonode/geoserver/
+      GEOSERVER_PUBLIC_LOCATION: ${SITEURL}geoserver/
+      IS_CELERY: 'true'
+      SITEURL: ${SITEURL}
+      RANCHER_STACK: {{ .Stack.Name }}
+      RANCHER_ENV: {{ .Environment.Name }}
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+    stdin_open: true
+    depends_on:
+      - db
+      - elasticsearch
+      - rabbitmq
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - statics:/mnt/volumes/statics
+      - geoserver-data-dir:/geoserver_data/data
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      org.geonode.component: celery
+      org.geonode.instance.name: geonode
+      io.rancher.container.pull_image: always
+
+  data-dir-conf:
+    image: geonode/geoserver_data:2.14.x
+    restart: on-failure
+    volumes:
+    - geoserver-data-dir:/geoserver_data/data
+    command: /bin/true
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      io.rancher.container.start_once: 'true'
+      io.rancher.container.pull_image: always
+      org.geonode.component: conf
+      org.geonode.instance.name: geonode
+
+  geoserver:
+    image: geonode/geoserver:2.14.x
+    restart: unless-stopped
+    stdin_open: true
+    # tty: true
+    depends_on:
+      - db
+      - elasticsearch
+      - rabbitmq
+      - data-dir-conf
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - geoserver-data-dir:/geoserver_data/data
+    environment:
+      GEOSERVER_ADMIN_PASSWORD: ${GEOSERVER_ADMIN_PASSWORD}
+      GEONODE_LB_HOST_IP: ${LB_HOST_IP}
+      GEONODE_LB_PORT: ${LB_HOST_PORT}
+      PUBLIC_PORT: '80'
+      GEOSERVER_JAVA_OPTS: '-Djava.awt.headless=true -XX:MaxPermSize=512m -XX:PermSize=256m -Xms512m -Xmx2048m -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:ParallelGCThreads=4 -Dfile.encoding=UTF8 -Duser.timezone=GMT -Djavax.servlet.request.encoding=UTF-8 -Djavax.servlet.response.encoding=UTF-8 -Duser.timezone=GMT -Dorg.geotools.shapefile.datetime=true'
+    labels:
+        io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+        org.geonode.component: geoserver
+        org.geonode.instance.name: geonode
+        io.rancher.container.pull_image: always
+
+  geonode:
+    image: geonode/nginx:geoserver
+    restart: unless-stopped
+    stdin_open: true
+    # tty: true
+    depends_on:
+      - django
+      - geoserver
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      lb_target: ${LB_TARGET_LABEL}
+      org.geonode.component: nginx
+      org.geonode.instance.name: geonode
+      io.rancher.container.pull_image: always
+
+  rabbitmq:
+    image: rabbitmq
+    stdin_open: true
+    tty: true
+    volumes: 
+     - rabbitmq:/var/lib/rabbitmq
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      org.geonode.component: rabbitmq
+      org.geonode.instance.name: geonode
+
+  elasticsearch:
+    image: elasticsearch:2.4.1
+    stdin_open: true
+    #tty: true
+    labels:
+      io.rancher.scheduler.affinity:host_label: ${HOST_AFFINITY}
+      org.geonode.component: elasticsearch
+      org.geonode.instance.name: geonode
+
+volumes:
+  geoserver-data-dir:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/geonode-path/geonode-data/geoserver-data-dir'
+  dbdata:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/geonode-path/geonode-data/dbdata'
+  dbbackups:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/geonode-path/geonode-data/dbbackups'
+  rabbitmq:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/geonode-path/geonode-data/rabbbitmq'
+  statics:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/geonode-path/geonode-data/statics'

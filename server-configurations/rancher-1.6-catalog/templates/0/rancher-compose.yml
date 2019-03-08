@@ -1,0 +1,83 @@
+---
+version: '2'
+catalog:
+    name: "Geonode for Resilience Academy"
+    version: "custom"
+    description: "Geonode deployment for geonode.resilienceacademy.ac.tz"
+    uuid: site-uuid
+    minimum_rancher_version: 'v1.6'
+
+    questions:
+        - variable: "GEONODE_DOCKER_VERSION"
+          label: "Geonode docker version to deploy from gitlab"
+          description: |
+                The version to deploy with the template
+          required: true
+          type: string
+          default: "latest"
+
+        - variable: "ALLOWED_HOSTS"
+          label: "List of allowed host header values"
+          description: |
+                List of host header values which should be
+                permitted. You should add full-qualified domain
+                names under which deployment is visible. Default
+                values, django and geonode values are
+                added internally. Example ['123.123.123.123','foo.bar.org']
+          required: true
+          type: string
+          default: "['site-internal-url','geonode.resilienceacademy.ac.tz']"
+
+        - variable: "SITEURL"
+          label: "Default URL for site"
+          description: |
+                URL to default location of site. It will be used
+                to construct absolute urls. Remember to add trailing
+                slash at the end. Example http://foo.org/ 
+          required: true
+          type: 'string'
+          default: "https://geonode.resilienceacademy.ac.tz/"
+
+        - variable: "SITENAME"
+          label: "Name of site"
+          description: |
+                Name of the site to be used in title
+          required: false
+          default: "Resilience Academy GeoNode"
+          type: string
+
+        - variable: "ADMIN_EMAILS"
+          label: "List of admin emails"
+          description: |
+                List of emails of admins, who should
+                receive notifications. Entries
+                should be separated with coma.
+          required: false
+          type: string
+          default: olljal@utu.fi
+
+        - variable: "GEOSERVER_ADMIN_PASSWORD"
+          label: "Password for GeoServer admin user"
+          description: |
+                Password for admin user in GeoServer.
+          required: true
+          type: string
+          default: 
+
+        - variable: "HOST_AFFINITY"
+          label: "Label of host to deploy on"
+          description: |
+                To keep containers running on specific
+                hosts, provide label attached to host
+                to deploy on. For example, if you create a label 
+                when deploying your host with key geonode 
+                and value true then you would enter here geonode=true
+          required: true
+          type: string
+          default: geonodehost=site-internal-name
+
+        - variable: "LB_TARGET_LABEL"
+          description: |
+             The target label for LB stack
+          type: string
+          default: "geonodetanzaniaprod"

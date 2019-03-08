@@ -1,0 +1,8 @@
+name: "GeoNode for Tanzania Production geonode.resilienceacademy.ac.tz"
+description: |
+    GeoNode deployment
+version: "custom"
+category: "GIS"
+maintainer: "UTU IT Services"
+license: "GPL"
+projectURL: "http://geonode.org"
